@@ -68,11 +68,18 @@ class Token:
 
 
     def __repr__(self):
+        repr = [self.text, self.number, self.separator_before]
         try:
-            return 'Token(%s, %s, %s, %s, %s)' % (
-                self.text, self.number, self.separator_before, str(self.lemmas), self.lemma)
+            repr.append(self.lemmas)
         except AttributeError:
-            return 'Token(%s, %s, %s, %s)' % (self.text, self.number, self.separator_before, str(self.lemmas))
+            pass
+
+        try:
+            repr.append(self.lemma)
+        except AttributeError:
+            pass
+
+        return 'Token(%s)' % ', '.join(map(lambda x: str(x),repr))
 
     def pretty_print(self, indent):
         try:
