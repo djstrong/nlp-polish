@@ -33,7 +33,7 @@ class Sentence:
 
     def get_all_tokens(self):
         tokens = []
-        for token in sentence.tokens:
+        for token in self.tokens:
             if isinstance(token, TokenGroup):
                 for subtoken in token.tokens:
                     tokens.append(subtoken)
