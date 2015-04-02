@@ -28,6 +28,21 @@ class Sentence:
     def __repr__(self):
         return 'Sentence(%s, %s)' % (self.text, str(self.tokens))
 
+    def get_all_tokens(self):
+        tokens = []
+        for token in sentence.tokens:
+            if isinstance(token, TokenGroup):
+                for subtoken in token.tokens:
+                    tokens.append(subtoken)
+            else:  # Token
+                tokens.append(token)
+        return tokens
+
+    def pretty_print(self, indent=0):
+        print '  ' * indent, '-', 'Sentence(%s)' % (self.text, )
+        for token in self.tokens:
+            token.pretty_print(indent + 1)
+
 
 class Token:
     def __init__(self, text, number=0, separator_before=' '):
@@ -50,7 +65,21 @@ class Token:
 
 
     def __repr__(self):
-        return 'Token(%s, %s, %s, %s)' % (self.text, self.number, self.separator_before, str(self.lemmas))
+        try:
+            return 'Token(%s, %s, %s, %s, %s)' % (
+            self.text, self.number, self.separator_before, str(self.lemmas), self.lemma)
+        except AttributeError:
+            return 'Token(%s, %s, %s, %s)' % (self.text, self.number, self.separator_before, str(self.lemmas))
+
+    def pretty_print(self, indent):
+        try:
+            print '  ' * indent, '-', 'Token(%s, %s, %s, %s)' % (
+            self.text, self.number, self.separator_before, self.lemma)
+        except AttributeError:
+            print '  ' * indent, '-', 'Token(%s, %s, %s)' % (self.text, self.number, self.separator_before)
+
+        for lemma in self.lemmas:
+            lemma.pretty_print(indent + 1)
 
 
 class TokenGroup():
@@ -76,12 +105,17 @@ class TokenGroup():
     def __repr__(self):
         return 'TokenGroup(%s, %s, %s, %s)' % (self.text, self.number, self.separator_before, str(self.tokens))
 
+    def pretty_print(self, indent):
+        print '  ' * indent, '-', 'TokenGroup(%s, %s, %s)' % (self.text, self.number, self.separator_before)
+        for token in self.tokens:
+            token.pretty_print(indent + 1)
+
 
 class Concraft:
     def __init__(self, port=10101):
         self.port = port
 
-    def tag(self, sentence):
+    def process(self, sentence):
         output = self._run(sentence)
         tokens = self._parse(output)
         return Sentence(self._group_tokens(tokens))
@@ -153,27 +187,53 @@ class LemmaConcraft:
         self.form = form
         self.lemma = lemma
         self.tags = tags
+        self.weight = -1.0
 
     def __repr__(self):
-        return 'LemmaConcraft(%s, %s, %s)' % (self.form, self.lemma, self.tags)
+        return 'LemmaConcraft(%s, %s, %s, %s)' % (self.form, self.lemma, self.tags, self.weight)
 
+    def get_key(self):
+        return ' '.join(map(lambda element: element.encode('utf-8'), [self.form, self.lemma, self.tags]))
 
-print Concraft().tag(u'chciałabym dupa mają chciałabym żłobionych')
+    def pretty_print(self, indent):
+        print '  ' * indent, '-', self
+
 
 class TokenWeighter:
     pass
 
+
 class LemmaWeighter:
     def __init__(self, db):
-        self.lemma_form_weights = shelve.open('shelve.db', protocol=2)
+        self.lemma_form_weights = shelve.open(db, flag='r', protocol=2)
 
-    def tag(self, sentence):
+    def process(self, sentence):
         if not isinstance(sentence, Sentence):
             raise ValueError('Input to LemmaWeighter need to be Sentence')
 
+        for token in sentence.get_all_tokens():
+            for lemma in token.lemmas:
+                try:
+                    lemma.weight = self.lemma_form_weights[lemma.get_key()]
+                except KeyError:
+                    pass
 
-class LemmaDesambiguator:
-    pass
+
+class LemmaWeightDesambiguator:
+    def process(self, sentence):
+        for token in sentence.get_all_tokens():
+            token.lemma = max(token.lemmas, key=lambda lemma: lemma.weight)
+
 
 class MaltParser:
     pass
+
+
+sentence = Concraft().process(u'chciałabym dupa mają chciałabym żłobionych')
+print sentence
+LemmaWeighter('lemma_form_weights.shelve').process(sentence)
+print sentence
+LemmaWeightDesambiguator().process(sentence)
+print sentence
+
+sentence.pretty_print()
