@@ -8,6 +8,7 @@ import os
 import sys
 import shelve
 import networkx as nx
+from pkg_resources import resource_filename, Requirement
 
 reload(sys)
 sys.setdefaultencoding("utf-8")
@@ -209,7 +210,10 @@ class TokenWeighter:
 
 
 class LemmaWeighter:
-    def __init__(self, db):
+    def __init__(self, db=None):
+        if db is None:
+            db = resource_filename(Requirement.parse("nlp_polish"), "nlp_polish/data/lemma_form_weights.shelve")
+
         self.lemma_form_weights = shelve.open(db, flag='r', protocol=2)
 
     def process(self, sentence):
@@ -222,13 +226,13 @@ class LemmaWeighter:
                     lemma.weight = self.lemma_form_weights[lemma.get_key()]
                 except KeyError:
                     pass
-
+        return sentence
 
 class LemmaWeightDesambiguator:
     def process(self, sentence):
         for token in sentence.get_all_tokens():
             token.lemma = max(token.lemmas, key=lambda lemma: lemma.weight)
-        return Sentence
+        return sentence
 
 
 class MaltParser:
@@ -299,10 +303,22 @@ class MaltParser:
             else:
                 raise ValueError('error, output_type can be nxgraph or list parent_child_edgelabel_list')
 
+class Pipeline:
+    def __init__(self):
+        self.pipeline = []
+
+    def add(self, tool):
+        self.pipeline.append(tool)
+
+    def process(self, result):
+        for tool in self.pipeline:
+            result = tool.process(result)
+        return result
+
 if __name__ == "__main__":
     sentence = Concraft().process(u'Oni nie mają nic.')
     print sentence
-    LemmaWeighter('lemma_form_weights.shelve').process(sentence)
+    LemmaWeighter().process(sentence)
     print sentence
     LemmaWeightDesambiguator().process(sentence)
     print sentence
@@ -310,3 +326,11 @@ if __name__ == "__main__":
     sentence.pretty_print()
 
     MaltParser('/home/kwrobel/malt/Malt/maltparser-1.8.1/').process(sentence)
+
+    pipeline = Pipeline()
+    pipeline.add(Concraft())
+    pipeline.add(LemmaWeighter())
+    pipeline.add(LemmaWeightDesambiguator())
+    pipeline.add(MaltParser('/home/kwrobel/malt/Malt/maltparser-1.8.1/'))
+    sentence=pipeline.process('asd')
+    sentence.pretty_print()

@@ -8,6 +8,7 @@ setup(name='nlp_polish',
       author_email='',
       license='',
       packages=['nlp_polish'],
+      package_data={'nlp_polish': ['data/*.shelve']},
       install_requires=[
           'networkx',
       ],
