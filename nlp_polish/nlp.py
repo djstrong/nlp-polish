@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from universal_utils import cd
 
 __author__ = 'djstrong'
 
 import os
 import sys
 import shelve
+import networkx as nx
 
 reload(sys)
 sys.setdefaultencoding("utf-8")
@@ -67,14 +69,14 @@ class Token:
     def __repr__(self):
         try:
             return 'Token(%s, %s, %s, %s, %s)' % (
-            self.text, self.number, self.separator_before, str(self.lemmas), self.lemma)
+                self.text, self.number, self.separator_before, str(self.lemmas), self.lemma)
         except AttributeError:
             return 'Token(%s, %s, %s, %s)' % (self.text, self.number, self.separator_before, str(self.lemmas))
 
     def pretty_print(self, indent):
         try:
             print '  ' * indent, '-', 'Token(%s, %s, %s, %s)' % (
-            self.text, self.number, self.separator_before, self.lemma)
+                self.text, self.number, self.separator_before, self.lemma)
         except AttributeError:
             print '  ' * indent, '-', 'Token(%s, %s, %s)' % (self.text, self.number, self.separator_before)
 
@@ -150,7 +152,10 @@ class Concraft:
         return tokens
 
     def _construct(self, token_line, lemma_lines, index):
-        form, separator_before = token_line.split("\t")
+        try:
+            form, separator_before = token_line.split("\t")
+        except ValueError:
+            raise Exception('Probably concraft-pl not working.')
         token = Token(form, separator_before=separator_before, number=index)
 
         token.lemmas = []
@@ -223,17 +228,85 @@ class LemmaWeightDesambiguator:
     def process(self, sentence):
         for token in sentence.get_all_tokens():
             token.lemma = max(token.lemmas, key=lambda lemma: lemma.weight)
+        return Sentence
 
 
 class MaltParser:
-    pass
+    TEMP_FILE = 'fileForMalt'
+
+    def __init__(self, maltparser_path, model_name='skladnica_liblinear_stackeager_final'):
+        self.maltparser_path = maltparser_path
+        self.model_name = model_name
+
+    def process(self, sentence):
+        sentence.dependency_graph  = self.parse_text(sentence)
+        return sentence
+
+    def _text2maltparser(self, sentence):
+        with open(self.TEMP_FILE, 'w') as file:
+            for token in sentence.get_all_tokens():
+                if token.text in ['.', ',', '?', '!']:
+                    file.write(str(
+                        token.number) + '\t' + token.text + '\t' + token.text + '\t' + 'interp' + '\t' + 'interp' + '\t' + '_' + '\t_\t_\t_\t_\n')
+                else:
+                    tags = token.lemma.tags
+                    idx = tags.find(':')
+                    if idx == -1:
+                        pos = tags
+                        other_tags = '_'
+                    else:
+                        pos = tags[:idx]
+                        other_tags = tags[idx + 1:]
+                        other_tags = other_tags.replace(':', '|')
+                    file.write(str(
+                        token.number) + '\t' + token.text + '\t' + token.lemma.lemma + '\t' + pos + '\t' + pos + '\t' + other_tags + '\t_\t_\t_\t_\n')
 
 
-sentence = Concraft().process(u'chciałabym dupa mają chciałabym żłobionych')
-print sentence
-LemmaWeighter('lemma_form_weights.shelve').process(sentence)
-print sentence
-LemmaWeightDesambiguator().process(sentence)
-print sentence
+    def parse_text(self, sentence, output_type='nxgraph'):
+        with cd(self.maltparser_path):
+            self._text2maltparser(sentence)
+            command = 'java -jar maltparser-*.jar -c ' + self.model_name + ' -i ' + self.TEMP_FILE + ' -if appdata/dataformat/conllx.xml -m parse 2>/dev/null'
+            output = os.popen(command).read().decode('utf-8').strip()
 
-sentence.pretty_print()
+            if output_type == 'nxgraph':
+                graph = nx.DiGraph()
+                tokens = sentence.get_all_tokens()
+                for i, line in enumerate(output.split('\n')):
+                    array = line.split('\t')
+                    try:
+                        parent_number = int(array[6]) - 1
+                    except IndexError:
+                        raise Exception('Probably MaltParser not working')
+                    number_of_child = i
+                    edge_name = array[7]
+                    if parent_number != -1:
+                        graph.add_edge(tokens[parent_number], tokens[number_of_child], edge=edge_name)
+                    else:
+                        graph.add_edge(Token('ROOT'), tokens[number_of_child], edge=edge_name)
+                return graph
+            elif output_type == 'parent_child_edgelabel_list':
+                edge_list = []
+                for i, line in enumerate(output.split('\n')):
+                    array = line.split('\t')
+                    parent_number = int(array[6]) - 1
+                    number_of_child = i
+                    edge_name = array[7]
+                    if parent_number != -1:
+                        edge_list.append([parent_number, number_of_child, edge_name])
+                    else:
+                        edge_list.append(['ROOT', number_of_child, edge_name])
+                return edge_list
+            else:
+                raise ValueError('error, output_type can be nxgraph or list parent_child_edgelabel_list')
+
+if __name__ == "__main__":
+    sentence = Concraft().process(u'Oni nie mają nic.')
+    print sentence
+    LemmaWeighter('lemma_form_weights.shelve').process(sentence)
+    print sentence
+    LemmaWeightDesambiguator().process(sentence)
+    print sentence
+
+    sentence.pretty_print()
+
+    MaltParser('/home/kwrobel/malt/Malt/maltparser-1.8.1/').process(sentence)
