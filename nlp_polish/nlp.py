@@ -132,7 +132,7 @@ class Concraft:
 
 
     def _run(self, sentence):
-        command = 'export PATH=$PATH:$HOME/.cabal/bin; echo %s | concraft-pl client --port %s | grep -P "(disamb$)|(^[^\t ])"' % (
+        command = 'export PATH=$PATH:$HOME/.cabal/bin; echo "%s" | concraft-pl client --port %s | grep -P "(disamb$)|(^[^\t ])"' % (
             sentence.encode('utf-8'), self.port)
         output = os.popen(command).read().decode('utf-8').strip()
         return output
@@ -256,7 +256,7 @@ class MaltParser:
     def _text2maltparser(self, sentence):
         with open(self.TEMP_FILE, 'w') as file:
             for token in sentence.get_all_tokens():
-                if token.text in ['.', ',', '?', '!']:
+                if token.text in ['.', ',', '?', '!', ')', '(']:
                     file.write(str(
                         token.number) + '\t' + token.text + '\t' + token.text + '\t' + 'interp' + '\t' + 'interp' + '\t' + '_' + '\t_\t_\t_\t_\n')
                 else:
