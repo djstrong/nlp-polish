@@ -291,9 +291,9 @@ class MaltParser:
                     number_of_child = i
                     edge_name = array[7]
                     if parent_number != -1:
-                        graph.add_edge(tokens[parent_number], tokens[number_of_child], edge=edge_name)
+                        graph.add_edge(tokens[parent_number].text, tokens[number_of_child].text, edge=edge_name)
                     else:
-                        graph.add_edge(Token('ROOT'), tokens[number_of_child], edge=edge_name)
+                        graph.add_edge(Token('ROOT').text, tokens[number_of_child].text, edge=edge_name)
                 return graph
             elif output_type == 'parent_child_edgelabel_list':
                 edge_list = []
