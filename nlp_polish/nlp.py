@@ -9,6 +9,7 @@ import sys
 import shelve
 import networkx as nx
 from pkg_resources import resource_filename, Requirement
+import uuid
 
 reload(sys)
 sys.setdefaultencoding("utf-8")
@@ -248,12 +249,18 @@ class MaltParser:
     def __init__(self, maltparser_path, model_name='skladnica_liblinear_stackeager_final'):
         self.maltparser_path = maltparser_path
         self.model_name = model_name
+        self.TEMP_FILE = ''
+
+    def rand_name(self):
+        filename = str(uuid.uuid4())
+        self.TEMP_FILE = filename
 
     def process(self, sentence):
         sentence.dependency_graph  = self.parse_text(sentence)
         return sentence
 
     def _text2maltparser(self, sentence):
+        self.rand_name()
         with open(self.TEMP_FILE, 'w') as file:
             for token in sentence.get_all_tokens():
                 if token.text in ['.', ',', '?', '!', ')', '(']:
@@ -278,7 +285,7 @@ class MaltParser:
             self._text2maltparser(sentence)
             command = 'java -jar maltparser-*.jar -c ' + self.model_name + ' -i ' + self.TEMP_FILE + ' -if appdata/dataformat/conllx.xml -m parse 2>/dev/null'
             output = os.popen(command).read().decode('utf-8').strip()
-
+    	    os.remove(self.TEMP_FILE)
             if output_type == 'nxgraph':
                 graph = nx.DiGraph()
                 tokens = sentence.get_all_tokens()
@@ -321,6 +328,8 @@ class Pipeline:
         for tool in self.pipeline:
             result = tool.process(result)
         return result
+
+
 
 if __name__ == "__main__":
     sentence = Concraft().process(u'Oni nie mają nic.')
